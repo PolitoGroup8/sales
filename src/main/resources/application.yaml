@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: sales
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mydatabase
+    username: myuser
+    password: mypassword
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
