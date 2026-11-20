@@ -1,11 +1,12 @@
+
 services:
   sales:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name:  sales
+    container_name: sales
     ports:
-      - "8080:8080"
+      - "${SALES_PORT}:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://sales-db:5432/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
@@ -14,6 +15,8 @@ services:
       sales-db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - sales-network
 
   sales-db:
     image: postgres:17
@@ -30,6 +33,12 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - sales-network
 
 volumes:
   postgres_prod_data:
+
+networks:
+  sales-network:
+    driver: bridge
