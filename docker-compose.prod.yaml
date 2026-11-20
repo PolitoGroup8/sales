@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sales-app
+    container_name:  sales
     ports:
       - "8080:8080"
     environment:
@@ -17,7 +17,7 @@ services:
 
   sales-db:
     image: postgres:17
-    container_name: sales-db-prod
+    container_name: sales-db
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}

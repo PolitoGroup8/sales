@@ -54,7 +54,7 @@ goto END
 echo.
 echo [PROD] Build dell'immagine e avvio dei container...
 echo        (la compilazione Gradle avviene dentro il Dockerfile)
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yaml up -d --build
 if %errorlevel% neq 0 (
     echo [ERRORE] Errore durante il deploy in produzione con Docker Compose!
     goto ERROR
@@ -70,11 +70,11 @@ goto END
 
 :RUN_DOWN
 echo.
-echo [DOWN] Arresto dei container prod e local...
-docker compose -f docker-compose.prod.yml down
-docker compose down
+echo [DOWN] Arresto dei container prod e local ed eliminazione dei volumi...
+docker compose -f docker-compose.prod.yaml down -v
+docker compose down -v
 echo.
-echo Container fermati. I volumi con i dati sono stati mantenuti.
+echo Container fermati e volumi eliminati.
 goto END
 
 
