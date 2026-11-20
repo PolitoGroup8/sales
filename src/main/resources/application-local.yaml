@@ -9,3 +9,9 @@ spring:
     show-sql: true
   flyway:
     locations: classpath:db/migration,classpath:db/dev-data
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_AMQP_PORT:5672}
+    username: ${RABBITMQ_DEFAULT_USER}
+    password: ${RABBITMQ_DEFAULT_PASS}
