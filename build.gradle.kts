@@ -27,6 +27,9 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
+	//rabbitMQ
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
+
 	//postgres
 	runtimeOnly("org.postgresql:postgresql")
 
