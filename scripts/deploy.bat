@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+REM Move to the repository root (parent of the scripts folder)
+pushd "%~dp0.."
+
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=local"
 
@@ -16,11 +19,9 @@ if %errorlevel% neq 0 (
 if /i "%MODE%"=="local" goto CHECK_ENV
 if /i "%MODE%"=="prod"  goto CHECK_ENV
 if /i "%MODE%"=="down"  goto RUN_DOWN
-if /i "%MODE%"=="logs"  goto RUN_LOGS
-if /i "%MODE%"=="reset" goto RUN_RESET
 
 echo [ERRORE] Parametro non valido: "%MODE%"
-echo Uso corretto: run.bat [local^|prod^|down^|logs^|reset]
+echo Uso corretto: deploy.bat [local^|prod^|down]
 goto ERROR
 
 
@@ -63,8 +64,7 @@ if %errorlevel% neq 0 (
 echo.
 echo === Completato! Ambiente di PRODUZIONE avviato ===
 echo - Applicazione su: http://localhost:8080
-echo - Log:             run.bat logs
-echo - Stop:            run.bat down
+echo - Stop:            scripts\deploy.bat down
 goto END
 
 
@@ -78,32 +78,11 @@ echo Container fermati e volumi eliminati.
 goto END
 
 
-:RUN_LOGS
-docker compose -f docker-compose.prod.yml logs -f sales
-goto END
-
-
-:RUN_RESET
-echo.
-echo [RESET] Elimino container e volumi di sviluppo (i dati andranno persi)...
-set /p CONFIRM="Sei sicuro? (s/n): "
-if /i not "%CONFIRM%"=="s" (
-    echo Operazione annullata.
-    goto END
-)
-docker compose down -v
-if %errorlevel% neq 0 (
-    echo [ERRORE] Errore durante il reset!
-    goto ERROR
-)
-echo.
-echo Reset completato. Rilancia "run.bat local" per ripartire con un DB pulito.
-goto END
-
-
 :ERROR
+popd
 pause
 exit /b 1
 
 :END
+popd
 endlocal
