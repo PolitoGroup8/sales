@@ -1,4 +1,3 @@
-
 services:
   sales:
     build:
@@ -8,21 +7,17 @@ services:
     ports:
       - "${SALES_PORT}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://sales-db:5432/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-
-      RABBITMQ_HOST: ${RABBITMQ_HOST}
-      RABBITMQ_PORT: ${RABBITMQ_PORT}
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${SALES_DB_HOST}:${SALES_DB_PORT}/${SALES_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${SALES_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${SALES_DB_PASSWORD}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
     depends_on:
       sales-db:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      - sales-network
 
   sales-db:
     image: postgres:17
@@ -31,6 +26,8 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
     healthcheck:
@@ -39,12 +36,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      - sales-network
 
 volumes:
   postgres_prod_data:
-
-networks:
-  sales-network:
-    driver: bridge
