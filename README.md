@@ -92,12 +92,6 @@ scripts\deploy.bat down
 
 **Warning:** this command also removes the volumes, so all database data will be lost.
 
-To view the application logs in production:
-
-```bash
-docker compose -f docker-compose.prod.yaml logs -f sales
-```
-
 ### 4. Running together with other services
 
 To start Sales together with other microservices (for example `sales_rabbitmq`), use the setup script of the `configuration` repository, which handles cloning, starting and stopping the combined environments.

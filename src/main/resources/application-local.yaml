@@ -1,17 +1,19 @@
+server:
+  port: ${SALES_PORT}
+
 spring:
   config:
     import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:postgresql://localhost:5432/${DB_NAME}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://${SALES_DB_HOST}:${SALES_DB_PORT}/${SALES_DB_NAME}
+    username: ${SALES_DB_USER}
+    password: ${SALES_DB_PASSWORD}
   jpa:
     show-sql: true
   flyway:
     locations: classpath:db/migration,classpath:db/dev-data
-
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_AMQP_PORT:5672}
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_DEFAULT_USER}
     password: ${RABBITMQ_DEFAULT_PASS}
