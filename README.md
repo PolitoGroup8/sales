@@ -1,65 +1,110 @@
 # Sales Service --- Database Design
 
-## Avvio ed esecuzione del progetto
+## Running the project
 
-Per eseguire il progetto è necessario avere **Docker** attivo e configurare il file `.env` con le credenziali richieste (prendendo spunto da `.env.example`). Tutti i comandi vanno eseguiti tramite lo script **`deploy.bat`**, situato nella **root del progetto**.
+To run the project, **Docker** must be running and the `.env` file must be configured with the required credentials (use `.env.example` as a reference). All commands are run through the **`deploy`** script located in the **`scripts/`** folder: `deploy.bat` on Windows, `deploy.sh` on Linux and macOS. The scripts work from any directory, because they move to the project root on their own.
 
-### 1. Avvio in locale (Sviluppo)
+On Linux and macOS, make the script executable (only once):
 
-1. Apri il terminale nella root del progetto (si consiglia l'uso di **IntelliJ IDEA**) ed esegui lo script `deploy.bat` (presente nella root) per avviare l'infrastruttura locale:
+```bash
+chmod +x scripts/deploy.sh
+```
 
-   ```bash
-   deploy.bat local
+### 1. Local run (Development)
+
+1. Open a terminal (using **IntelliJ IDEA** is recommended) and run the script to start the local infrastructure:
+
+   **Windows:**
+
+   ```bat
+   scripts\deploy.bat local
    ```
 
-   Questo comando avvia i container **PostgreSQL** e **pgAdmin** utilizzando le variabili definite nel file `.env`.
+   **Linux / macOS:**
 
-2. Una volta terminato lo script, avvia l'applicazione **Spring Boot** direttamente da IntelliJ.
+   ```bash
+   ./scripts/deploy.sh local
+   ```
 
-3. All'avvio, **Flyway** applica automaticamente lo schema del database e carica una batch iniziale di dati di test.
+   If you do not specify a parameter, the default mode is `local`. This command starts the **PostgreSQL** and **pgAdmin** containers using the variables defined in the `.env` file.
 
-#### Configurazione di pgAdmin
+2. Once the script has finished, start the **Spring Boot** application directly from IntelliJ.
 
-1. Apri il browser all'indirizzo di pgAdmin (`http://localhost:5050`) ed effettua l'accesso con email e password impostate nel `.env`.
+3. On startup, **Flyway** automatically applies the database schema and loads an initial batch of test data.
 
-2. Aggiungi un nuovo server (*Add New Server*):
+#### pgAdmin configuration
 
-    * **General -> Name**: assegna un nome a piacere (es. `Sales DB`).
+1. Open pgAdmin in your browser (`http://localhost:5050`) and log in with the email and password set in `.env`.
 
-    * **Connection -> Host name/address**: inserisci `sales-db` (o `sales-<nome del container postgresql>`).
+2. Add a new server (*Add New Server*):
 
-    * **Connection -> Username / Password**: inserisci le credenziali del database definite nel `.env`.
+    * **General -> Name**: choose any name (e.g. `Sales DB`).
 
----
+    * **Connection -> Host name/address**: enter `sales-db` (or `sales-<name of the postgresql container>`).
 
-### 2. Avvio in produzione
-
-Dalla root del progetto, lancia lo script `deploy.bat` con l'opzione `prod`:
-
-```bash
-deploy.bat prod
-```
-
-In questa modalità:
-
-* I dati di test locali (`dev-data`) **non** vengono caricati.
-
-* **pgAdmin** non viene scaricato né avviato.
+    * **Connection -> Username / Password**: enter the database credentials defined in `.env`.
 
 ---
 
-### 3. Arresto dei servizi
+### 2. Production run
 
-Per fermare i container e ripulire l'ambiente (inclusi i volumi locali), esegui dalla root del progetto:
+Run the script with the `prod` option:
+
+**Windows:**
+
+```bat
+scripts\deploy.bat prod
+```
+
+**Linux / macOS:**
 
 ```bash
-deploy.bat down
+./scripts/deploy.sh prod
 ```
-## 1. Schema relazionale
 
-Il diagramma mostra le relazioni interne al database Sales. Gli
-identificativi `catalog_*` e `payments_*` sono riferimenti a sistemi
-esterni e, intenzionalmente, non hanno foreign key.
+In this mode:
+
+* The image is built with `--build` (the Gradle build runs inside the Dockerfile).
+
+* The local test data (`dev-data`) is **not** loaded.
+
+* **pgAdmin** is neither downloaded nor started.
+
+* The application is available at `http://localhost:8080`.
+
+---
+
+### 3. Stopping the services
+
+To stop the containers and clean up the environment (including the volumes, for both `local` and `prod` modes):
+
+**Windows:**
+
+```bat
+scripts\deploy.bat down
+```
+
+**Linux / macOS:**
+
+```bash
+./scripts/deploy.sh down
+```
+
+**Warning:** this command also removes the volumes, so all database data will be lost.
+
+To view the application logs in production:
+
+```bash
+docker compose -f docker-compose.prod.yaml logs -f sales
+```
+
+### 4. Running together with other services
+
+To start Sales together with other microservices (for example `sales_rabbitmq`), use the setup script of the `configuration` repository, which handles cloning, starting and stopping the combined environments.
+
+## 1. Relational schema
+
+The diagram shows the relationships internal to the Sales database. The `catalog_*` and `payments_*` identifiers are references to external systems and, intentionally, have no foreign keys.
 
 ```mermaid
 erDiagram
@@ -147,143 +192,124 @@ erDiagram
         TIMESTAMPTZ published_at
     }
 ```
-## 2. Tabelle
+
+## 2. Tables
 
 ### 2.1 `sales_sessions`
 
-Rappresenta lo **snapshot locale di una sessione Catalog** necessario a
-Sales per gestire la vendita senza interrogare Catalog durante il
-checkout.
+Represents the **local snapshot of a Catalog session** that Sales needs in order to manage sales without querying Catalog during checkout.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `id` | Identificativo UUID interno a Sales |
-| `catalog_event_id` | ID dell'evento in Catalog |
-| `catalog_session_id` | ID della sessione in Catalog |
-| `catalog_venue_id` | ID della venue in Catalog |
-| `catalog_session_start_at` | Data e ora di inizio della sessione |
-| `catalog_sales_start_at` | Apertura delle vendite |
-| `catalog_sales_end_at` | Chiusura delle vendite |
-| `catalog_max_tickets_per_order` | Numero massimo di biglietti per ordine |
-| `snapshot_version` | Versione dello snapshot applicata da Sales |
-| `snapshot_created_at` | Creazione dello snapshot |
-| `snapshot_updated_at` | Ultimo aggiornamento dello snapshot |
+| `id` | Sales-internal UUID identifier |
+| `catalog_event_id` | Event ID in Catalog |
+| `catalog_session_id` | Session ID in Catalog |
+| `catalog_venue_id` | Venue ID in Catalog |
+| `catalog_session_start_at` | Session start date and time |
+| `catalog_sales_start_at` | Sales opening |
+| `catalog_sales_end_at` | Sales closing |
+| `catalog_max_tickets_per_order` | Maximum number of tickets per order |
+| `snapshot_version` | Snapshot version applied by Sales |
+| `snapshot_created_at` | Snapshot creation |
+| `snapshot_updated_at` | Last snapshot update |
 
 ### 2.2 `session_seats`
 
-Contiene una riga per ogni posto vendibile associato a una sessione.
-Sales conserva **solo le informazioni commerciali**, non la geometria
-della pianta o i dati grafici del posto.
+Contains one row for each sellable seat associated with a session. Sales keeps **only the commercial information**, not the floor plan geometry or the seat's graphical data.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `id` | Identificativo UUID interno della combinazione sessione/posto |
-| `sales_session_id` | FK a `sales_sessions.id` |
-| `catalog_seat_id` | Identificativo del posto fisico in Catalog |
-| `status` | Disponibilità commerciale: `FREE`, `HELD`, `SOLD` |
-| `catalog_currency` |    `EUR`, `USD`, `JPY`, `GBP` |
-| `catalog_price` | Prezzo ricevuto da Catalog nello snapshot |
+| `id` | Internal UUID identifier of the session/seat combination |
+| `sales_session_id` | FK to `sales_sessions.id` |
+| `catalog_seat_id` | Identifier of the physical seat in Catalog |
+| `status` | Commercial availability: `FREE`, `HELD`, `SOLD` |
+| `catalog_currency` | `EUR`, `USD`, `JPY`, `GBP` |
+| `catalog_price` | Price received from Catalog in the snapshot |
 
-Il frontend può unire la seat map restituita da Catalog con
-disponibilità e prezzi restituiti da Sales usando `catalog_seat_id`.
+The frontend can combine the seat map returned by Catalog with the availability and prices returned by Sales by using `catalog_seat_id`.
 
 ### 2.3 `holds`
 
-Rappresenta il blocco temporaneo dei posti selezionati da un cliente.
+Represents the temporary lock on the seats selected by a customer.
 
-| Colonna | Significato | Stati concordati |
+| Column | Meaning | Agreed states |
 |---|---|---|
-| `id` | Identificativo UUID | - |
-| `customer_id` | Cliente proprietario dell'HOLD | - |
-| `status` | Stato dell'HOLD | `ACTIVE`: HOLD attivo.<br>`ORDER_CREATED`: è stato creato l'ordine a partire dall'HOLD.<br>`EXPIRED`: HOLD scaduto. |
-| `expires_at` | Scadenza del blocco | - |
-| `created_at` | Creazione | - |
-| `updated_at` | Ultima modifica | - |
+| `id` | UUID identifier | - |
+| `customer_id` | Customer who owns the HOLD | - |
+| `status` | HOLD status | `ACTIVE`: active HOLD.<br>`ORDER_CREATED`: an order has been created from the HOLD.<br>`EXPIRED`: expired HOLD. |
+| `expires_at` | Lock expiration | - |
+| `created_at` | Creation | - |
+| `updated_at` | Last modification | - |
 
-
-Se il cliente chiude il browser, il backend non tenta di rilevarlo:
-l'HOLD rimane attivo fino alla scadenza. Un processo backend si occupa
-di scadere gli HOLD.
+If the customer closes the browser, the backend does not try to detect it: the HOLD remains active until it expires. A backend process takes care of expiring HOLDs.
 
 ### 2.4 `hold_items`
 
-Associa i posti a un HOLD.
+Associates seats with a HOLD.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `id` | Identificativo UUID |
-| `hold_id` | FK a `holds.id` |
-| `seat_id` | FK a `session_seats.id` |
+| `id` | UUID identifier |
+| `hold_id` | FK to `holds.id` |
+| `seat_id` | FK to `session_seats.id` |
 
-La creazione di un HOLD deve verificare e aggiornare atomicamente i
-posti: solo i posti con stato `FREE` possono passare a `HELD`. Il
-controllo deve essere sicuro in presenza di richieste concorrenti.
+Creating a HOLD must check and update the seats atomically: only seats with status `FREE` can move to `HELD`. The check must be safe under concurrent requests.
 
 ### 2.5 `orders`
 
-Rappresenta l'ordine commerciale creato a partire da un HOLD.
+Represents the commercial order created from a HOLD.
 
-| Colonna | Significato | Stati concordati |
+| Column | Meaning | Agreed states |
 |---|---|---|
-| `id` | Identificativo UUID | - |
-| `hold_id` | FK a `holds.id`, univoca | - |
-| `customer_id` | Identificativo del cliente | - |
-| `customer_email` | Snapshot dell'email al momento dell'ordine | - |
-| `customer_first_name` | Snapshot del nome | - |
-| `customer_last_name` | Snapshot del cognome | - |
-| `total_amount` | Importo totale dell'ordine | - |
-| `currency` | Codice valuta ISO 4217, ad esempio `EUR` | - |
-| `status` | Stato dell'ordine | `PENDING_PAYMENT`<br>`PAID`<br>`PAYMENT_FAILED`<br>`EXPIRED`<br>`CANCELLED` |
-| `payment_expires_at` | Scadenza del tempo concesso per il pagamento | - |
-| `payments_payment_id` | ID del pagamento in Payments, nullable | - |
-| `created_at` | Creazione | - |
-| `updated_at` | Ultima modifica | - |
+| `id` | UUID identifier | - |
+| `hold_id` | FK to `holds.id`, unique | - |
+| `customer_id` | Customer identifier | - |
+| `customer_email` | Snapshot of the email at the time of the order | - |
+| `customer_first_name` | Snapshot of the first name | - |
+| `customer_last_name` | Snapshot of the last name | - |
+| `total_amount` | Total order amount | - |
+| `currency` | ISO 4217 currency code, for example `EUR` | - |
+| `status` | Order status | `PENDING_PAYMENT`<br>`PAID`<br>`PAYMENT_FAILED`<br>`EXPIRED`<br>`CANCELLED` |
+| `payment_expires_at` | Expiration of the time allowed for payment | - |
+| `payments_payment_id` | Payment ID in Payments, nullable | - |
+| `created_at` | Creation | - |
+| `updated_at` | Last modification | - |
 
-Al momento della creazione, `holds.expires_at` e
-`orders.payment_expires_at` possono ricevere lo stesso timestamp. Dopo
-la creazione dell'ordine, il processo di pagamento è governato dalla
-scadenza dell'ordine.
+At creation time, `holds.expires_at` and `orders.payment_expires_at` may receive the same timestamp. After the order is created, the payment process is governed by the order's expiration.
 
 ### 2.6 `order_items`
 
-Contiene una riga per ogni posto associato all'ordine.
+Contains one row for each seat associated with the order.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `id` | Identificativo UUID |
-| `order_id` | FK a `orders.id` |
-| `seat_id` | FK a `session_seats.id`, univoca |
-| `catalog_unit_price` | Prezzo unitario fotografato al momento dell'ordine |
-| `currency` | Codice valuta ISO 4217 (`EUR`, `USD`, `JPY`, `GBP`) |
+| `id` | UUID identifier |
+| `order_id` | FK to `orders.id` |
+| `seat_id` | FK to `session_seats.id`, unique |
+| `catalog_unit_price` | Unit price captured at the time of the order |
+| `currency` | ISO 4217 currency code (`EUR`, `USD`, `JPY`, `GBP`) |
 
 ### 2.7 `incoming_messages`
 
-Registra i messaggi ricevuti dagli altri microservizi e già elaborati da
-Sales. Serve a garantire l'idempotenza: se lo stesso messaggio viene
-consegnato più volte, Sales riconosce l'ID già registrato e non ripete
-l'elaborazione.
+Records the messages received from the other microservices and already processed by Sales. It guarantees idempotency: if the same message is delivered more than once, Sales recognizes the already-recorded ID and does not repeat the processing.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `message_id` | ID originale del messaggio, PK |
-| `message_type` | Tipo di messaggio ricevuto |
-| `payload` | Contenuto originale del messaggio, JSONB |
-| `processed_at` | Timestamp dell'elaborazione |
+| `message_id` | Original message ID, PK |
+| `message_type` | Type of the received message |
+| `payload` | Original message content, JSONB |
+| `processed_at` | Processing timestamp |
 
-La registrazione del messaggio, l'aggiornamento dei dati di business e
-l'eventuale inserimento in `outgoing_messages` devono avvenire nella
-stessa transazione. Se la transazione fallisce, anche la registrazione
-del messaggio viene annullata e il broker può riconsegnarlo.
+Recording the message, updating the business data and any insertion into `outgoing_messages` must happen in the same transaction. If the transaction fails, the message record is also rolled back and the broker can redeliver the message.
 
 ### 2.8 `outgoing_messages`
 
-Registra i messaggi generati da Sales che devono essere pubblicati sul
-message broker. Implementa il lato Outbox del pattern.
+Records the messages generated by Sales that must be published to the message broker. It implements the Outbox side of the pattern.
 
-| Colonna | Significato |
+| Column | Meaning |
 |---|---|
-| `id` | Identificativo UUID del messaggio, PK |
-| `message_type` | Tipo di messaggio da pubblicare |
-| `payload` | Contenuto del messaggio, JSONB |
-| `created_at` | Momento di creazione |
-| `published_at` | Momento di pubblicazione confermata; nullable |
+| `id` | UUID identifier of the message, PK |
+| `message_type` | Type of message to publish |
+| `payload` | Message content, JSONB |
+| `created_at` | Creation time |
+| `published_at` | Time of confirmed publication; nullable |
