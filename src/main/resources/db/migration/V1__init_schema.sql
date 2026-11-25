@@ -8,7 +8,7 @@
 -- successfully applied to this local snapshot.
 
 CREATE TABLE sales_sessions (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     catalog_event_id UUID NOT NULL,
     catalog_session_id UUID NOT NULL,
@@ -45,16 +45,24 @@ CREATE TABLE sales_sessions (
 -- for a specific session.
 -- Each record refers to a physical seat managed by Catalog,
 -- while Sales independently tracks its status and price.
+-- catalog_seat_label is the human-readable label of the seat
+-- (for example the row and number shown to the customer).
 -- Does not store seat map or graphical information.
+-- Status meaning:
+--   FREE : available for purchase.
+--   HELD : locked by an order in PENDING_PAYMENT, until the
+--          order expires or is paid.
+--   SOLD : purchased (order PAID).
 
 CREATE TABLE session_seats (
-   id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
    sales_session_id UUID NOT NULL,
    catalog_seat_id UUID NOT NULL,
+   catalog_seat_label VARCHAR(50) NOT NULL,
 
    status VARCHAR(10) NOT NULL DEFAULT 'FREE',
-   catalog_price NUMERIC(10, 2) NOT NULL,
+   catalog_price VARCHAR(10) NOT NULL,
    catalog_currency CHAR(3) NOT NULL DEFAULT 'EUR',
 
    CONSTRAINT fk_session_seats_sales_session
@@ -68,61 +76,10 @@ CREATE TABLE session_seats (
        CHECK (status IN ('FREE', 'HELD', 'SOLD')),
 
    CONSTRAINT chk_session_seats_price
-       CHECK (catalog_price >= 0),
+       CHECK (catalog_price ~ '^\d+(\.\d+)?$' AND catalog_price::NUMERIC >= 0),
 
    CONSTRAINT chk_session_seats_currency
        CHECK (catalog_currency IN ('EUR', 'USD', 'JPY', 'GBP'))
-);
-
-
--- =====================================================
--- HOLDS
--- =====================================================
--- Represents a temporary reservation of one or more seats
--- made by a customer during the purchase process.
--- An ACTIVE hold reserves its seats until expiration.
--- ORDER_CREATED indicates that an order has been created
--- from the hold, while EXPIRED indicates an expired hold.
-
-CREATE TABLE holds (
-   id UUID PRIMARY KEY,
-
-   customer_id UUID NOT NULL,
-   status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-   expires_at TIMESTAMPTZ NOT NULL,
-
-   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-   CONSTRAINT chk_holds_status
-       CHECK (status IN ('ACTIVE', 'ORDER_CREATED', 'EXPIRED'))
-);
-
-
--- =====================================================
--- HOLD ITEMS
--- =====================================================
--- Represents the individual seats included in a hold.
--- Each item references a session seat managed by Sales.
--- A hold can contain multiple seats, but the same seat
--- cannot appear more than once within the same hold.
-
-CREATE TABLE hold_items (
-    id UUID PRIMARY KEY,
-
-    hold_id UUID NOT NULL,
-    seat_id UUID NOT NULL,
-
-    CONSTRAINT fk_hold_items_hold
-        FOREIGN KEY (hold_id)
-            REFERENCES holds(id),
-
-    CONSTRAINT fk_hold_items_seat
-        FOREIGN KEY (seat_id)
-            REFERENCES session_seats(id),
-
-    CONSTRAINT uq_hold_items_hold_seat
-        UNIQUE (hold_id, seat_id)
 );
 
 
@@ -142,89 +99,74 @@ CREATE INDEX idx_session_seats_status
     ON session_seats(sales_session_id, status);
 
 
--- =====================================================
--- HOLDS INDEXES
--- =====================================================
-
-CREATE INDEX idx_holds_customer
-    ON holds(customer_id);
-
-CREATE INDEX idx_holds_expiration
-    ON holds(expires_at)
-    WHERE status = 'ACTIVE';
-
-
--- =====================================================
--- HOLD ITEMS INDEXES
--- =====================================================
-
-CREATE INDEX idx_hold_items_seat
-    ON hold_items(seat_id);
-
-
 
 -- =====================================================
 -- ORDERS
 -- =====================================================
--- Represents a customer's purchase created from a HOLD.
--- An order is created when the customer confirms the
--- selected seats and proceeds to the order summary.
+-- Represents a customer's purchase.
+-- An order is created at checkout, when the customer confirms
+-- the selected seats. In the same transaction the seats are
+-- locked (HELD) and the payment timer (expires_at) starts.
+-- Seat selection before checkout is not persisted and does
+-- not lock any seat.
 -- Stores customer and price snapshots, payment information
 -- and the current order status.
 -- Payment processing is managed by the Payments service.
 
 CREATE TABLE orders (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    hold_id UUID NOT NULL,
+    sales_session_id UUID NOT NULL,
 
     customer_id UUID NOT NULL,
-    customer_email VARCHAR(255) NOT NULL,
-    customer_first_name VARCHAR(100) NOT NULL,
-    customer_last_name VARCHAR(100) NOT NULL,
 
-    total_amount NUMERIC(10, 2) NOT NULL,
+    total_amount VARCHAR(10) NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'EUR',
 
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING_PAYMENT',
 
-    payment_expires_at TIMESTAMPTZ NOT NULL,
-    payments_payment_id UUID,
+    expires_at TIMESTAMPTZ NOT NULL,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_orders_hold
-        FOREIGN KEY (hold_id)
-            REFERENCES holds(id),
-
-    CONSTRAINT uq_orders_hold
-        UNIQUE (hold_id),
+    CONSTRAINT fk_orders_sales_session
+        FOREIGN KEY (sales_session_id)
+            REFERENCES sales_sessions(id),
 
     CONSTRAINT chk_orders_total_amount
-        CHECK (total_amount >= 0),
+        CHECK (total_amount ~ '^\d+(\.\d+)?$' AND total_amount::NUMERIC >= 0),
 
     CONSTRAINT chk_currency
         CHECK (
-            currency IN (
-                'EUR',
-                'USD',
-                'JPY',
-                'GBP'
-            )
-        ),
+            currency IN ('EUR', 'USD', 'JPY', 'GBP')),
 
     CONSTRAINT chk_orders_status
-        CHECK (
-            status IN (
-                       'PENDING_PAYMENT',
-                       'PAID',
-                       'PAYMENT_FAILED',
-                       'EXPIRED',
-                       'CANCELLED'
-                )
-            )
+        CHECK (status IN ('PENDING_PAYMENT', 'PAID', 'PAYMENT_FAILED', 'EXPIRED', 'CANCELLED'))
 );
+
+-- =====================================================
+-- ORDER PAYMENTS
+-- =====================================================
+-- Tracks payment attempts or references associated with an order
+-- as managed by the external Payments service.
+-- payments_payment_id is unique to prevent duplicate linkage
+-- of the same external payment across orders or retries.
+CREATE TABLE order_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sales_order_id UUID NOT NULL,
+    payments_payment_id UUID NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_order_payments_order
+        FOREIGN KEY (sales_order_id) REFERENCES orders(id),
+
+    CONSTRAINT uq_order_payments_external
+        UNIQUE (payments_payment_id)
+);
+
+CREATE INDEX idx_order_payments_order_id ON order_payments(sales_order_id);
 
 
 -- =====================================================
@@ -234,11 +176,14 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_customer
     ON orders(customer_id);
 
+CREATE INDEX idx_orders_session
+    ON orders(sales_session_id);
+
 CREATE INDEX idx_orders_status
     ON orders(status);
 
 CREATE INDEX idx_orders_payment_expiration
-    ON orders(payment_expires_at)
+    ON orders(expires_at)
     WHERE status = 'PENDING_PAYMENT';
 
 
@@ -247,36 +192,38 @@ CREATE INDEX idx_orders_payment_expiration
 -- ORDER ITEMS
 -- =====================================================
 -- Represents the individual seats purchased within an order.
--- Each item refers to a seat managed by Sales and stores
--- the unit price applied at the time of purchase.
--- The price is kept as a historical snapshot and does not
--- change if the Catalog price is updated later.
-
+-- Each item refers to an order and a seat managed by Sales
+-- (sales_order_id, sales_seat_id) and stores the unit price,
+-- the currency and the seat label applied by Sales at the
+-- time of purchase.
+-- Price, currency and label are kept as a historical snapshot
+-- and do not change if the Catalog data is updated later.
 CREATE TABLE order_items (
-     id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-     order_id UUID NOT NULL,
-     seat_id UUID NOT NULL,
+     sales_order_id UUID NOT NULL,
+     sales_seat_id UUID NOT NULL,
+     sales_seat_label VARCHAR(50) NOT NULL,
 
-     catalog_unit_price NUMERIC(10, 2) NOT NULL,
-     currency CHAR(3) NOT NULL DEFAULT 'EUR',
+     sales_unit_price VARCHAR(10) NOT NULL,
+     sales_currency CHAR(3) NOT NULL DEFAULT 'EUR',
 
      CONSTRAINT fk_order_items_order
-         FOREIGN KEY (order_id)
+         FOREIGN KEY (sales_order_id)
              REFERENCES orders(id),
 
      CONSTRAINT fk_order_items_seat
-         FOREIGN KEY (seat_id)
+         FOREIGN KEY (sales_seat_id)
              REFERENCES session_seats(id),
 
      CONSTRAINT uq_order_items_seat
-         UNIQUE (seat_id),
+         UNIQUE (sales_order_id, sales_seat_id),
 
      CONSTRAINT chk_order_items_unit_price
-         CHECK (catalog_unit_price >= 0),
+         CHECK (sales_unit_price ~ '^\d+(\.\d+)?$' AND sales_unit_price::NUMERIC >= 0),
 
      CONSTRAINT chk_order_items_currency
-         CHECK (currency IN ('EUR', 'USD', 'JPY', 'GBP'))
+         CHECK (sales_currency IN ('EUR', 'USD', 'JPY', 'GBP'))
 );
 
 
@@ -285,7 +232,10 @@ CREATE TABLE order_items (
 -- =====================================================
 
 CREATE INDEX idx_order_items_order
-    ON order_items(order_id);
+    ON order_items(sales_order_id);
+
+CREATE INDEX idx_order_items_seat
+    ON order_items(sales_seat_id);
 
 
 -- Stores messages generated by the Sales service that must be published
@@ -294,7 +244,7 @@ CREATE INDEX idx_order_items_order
 -- The Publisher reads unpublished messages and updates published_at
 -- after successful publication.
 CREATE TABLE outgoing_messages (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_type VARCHAR(100) NOT NULL,
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -310,9 +260,16 @@ CREATE INDEX idx_outgoing_messages_unpublished
 -- its payload in the same transaction as the corresponding business
 -- operations, preventing duplicate processing when a message is
 -- delivered more than once.
+-- id is the internal identifier generated by the database;
+-- external_message_id is the identifier assigned by the sender
+-- and guarantees idempotency through its UNIQUE constraint.
 CREATE TABLE incoming_messages (
-   message_id UUID PRIMARY KEY,
+   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+   external_message_id UUID NOT NULL,
    message_type VARCHAR(100) NOT NULL,
    payload JSONB NOT NULL,
-   processed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+   processed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+   CONSTRAINT uq_incoming_messages_external_message_id
+       UNIQUE (external_message_id)
 );

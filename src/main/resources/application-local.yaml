@@ -17,3 +17,8 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_DEFAULT_USER}
     password: ${RABBITMQ_DEFAULT_PASS}
+
+logging:
+  level:
+    root: INFO
+    it.polito.wa2.group8: TRACE
