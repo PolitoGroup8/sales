@@ -8,3 +8,25 @@ spring:
     show-sql: false
   flyway:
     enabled: true
+  rabbitmq:
+    # The broker confirms (ack/nack) every published message: the outbox publisher
+    # marks a message as published only after its confirm.
+    publisher-confirm-type: correlated
+    # A message that no queue receives (no matching binding) is returned to Sales
+    # instead of being silently dropped by the broker.
+    publisher-returns: true
+    template:
+      mandatory: true
+
+sales:
+  outbox:
+    exchange: orders-events
+    routing-keys:
+      # message_type in outgoing_messages -> routing key on the exchange
+      "[OrderPaid]": order.paid
+    batch-size: 50
+    confirm-timeout: 5s
+    scheduler:
+      enabled: true
+      # pause between two runs of the publisher, in milliseconds
+      poll-interval-ms: 1000

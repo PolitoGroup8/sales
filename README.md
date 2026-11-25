@@ -38,11 +38,11 @@ chmod +x scripts/deploy.sh
 
 2. Add a new server (*Add New Server*):
 
-    * **General -> Name**: choose any name (e.g. `Sales DB`).
+   * **General -> Name**: choose any name (e.g. `Sales DB`).
 
-    * **Connection -> Host name/address**: enter `sales-db` (or `sales-<name of the postgresql container>`).
+   * **Connection -> Host name/address**: enter `sales-db` (or `sales-<name of the postgresql container>`).
 
-    * **Connection -> Username / Password**: enter the database credentials defined in `.env`.
+   * **Connection -> Username / Password**: enter the database credentials defined in `.env`.
 
 ---
 
@@ -98,93 +98,82 @@ To start Sales together with other microservices (for example `sales_rabbitmq`),
 
 ## 1. Relational schema
 
-The diagram shows the relationships internal to the Sales database. The `catalog_*` and `payments_*` identifiers are references to external systems and, intentionally, have no foreign keys.
+The diagram shows the relationships internal to the Sales database. The `catalog_*` and `payments_*` identifiers are references to external systems and, intentionally, have no foreign keys. The `sales_*` columns of `order_items` and `order_payments` are data owned by Sales or references to Sales' own tables.
 
 ```mermaid
 erDiagram
-    sales_sessions ||--o{ session_seats : contains
-    holds ||--|{ hold_items : contains
-    session_seats ||--o{ hold_items : reserved_by
-    holds ||--o| orders : creates
-    orders ||--|{ order_items : contains
-    session_seats ||--o{ order_items : referenced_by
+   sales_sessions ||--o{ session_seats : contains
+   sales_sessions ||--o{ orders : receives
+   orders ||--|{ order_items : contains
+   orders ||--o{ order_payments : has
+   session_seats ||--o{ order_items : referenced_by
 
-    sales_sessions {
-        UUID id PK
-        UUID catalog_event_id
-        UUID catalog_session_id UK
-        UUID catalog_venue_id
-        TIMESTAMPTZ catalog_session_start_at
-        TIMESTAMPTZ catalog_sales_start_at
-        TIMESTAMPTZ catalog_sales_end_at
-        INTEGER catalog_max_tickets_per_order
-        BIGINT snapshot_version
-        TIMESTAMPTZ snapshot_created_at
-        TIMESTAMPTZ snapshot_updated_at
-    }
+   sales_sessions {
+      UUID id PK
+      UUID catalog_event_id
+      UUID catalog_session_id UK
+      UUID catalog_venue_id
+      TIMESTAMPTZ catalog_session_start_at
+      TIMESTAMPTZ catalog_sales_start_at
+      TIMESTAMPTZ catalog_sales_end_at
+      INTEGER catalog_max_tickets_per_order
+      BIGINT snapshot_version
+      TIMESTAMPTZ snapshot_created_at
+      TIMESTAMPTZ snapshot_updated_at
+   }
 
-    session_seats {
-        UUID id PK
-        UUID sales_session_id FK
-        UUID catalog_seat_id
-        VARCHAR status "FREE, HELD, SOLD"
-        NUMERIC catalog_price
-        CHAR catalog_currency "EUR, USD, JPY, GBP"
-    }
+   session_seats {
+      UUID id PK
+      UUID sales_session_id FK
+      UUID catalog_seat_id
+      VARCHAR catalog_seat_label
+      VARCHAR status "FREE, HELD, SOLD"
+      VARCHAR catalog_price
+      CHAR catalog_currency "EUR, USD, JPY, GBP"
+   }
 
-    holds {
-        UUID id PK
-        UUID customer_id
-        VARCHAR status "ACTIVE, ORDER_CREATED, EXPIRED"
-        TIMESTAMPTZ expires_at
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
+   orders {
+      UUID id PK
+      UUID sales_session_id FK
+      UUID customer_id
+      VARCHAR total_amount
+      CHAR currency "EUR, USD, JPY, GBP"
+      VARCHAR status "PENDING_PAYMENT, PAID, PAYMENT_FAILED, EXPIRED, CANCELLED"
+      TIMESTAMPTZ expires_at
+      TIMESTAMPTZ created_at
+      TIMESTAMPTZ updated_at
+   }
 
-    hold_items {
-        UUID id PK
-        UUID hold_id FK
-        UUID seat_id FK
-    }
+   order_payments {
+      UUID id PK
+      UUID sales_order_id FK
+      UUID payments_payment_id UK
+      TIMESTAMPTZ created_at
+   }
 
-    orders {
-        UUID id PK
-        UUID hold_id FK, UK
-        UUID customer_id
-        VARCHAR customer_email
-        VARCHAR customer_first_name
-        VARCHAR customer_last_name
-        NUMERIC total_amount
-        CHAR currency "EUR, USD, JPY, GBP"
-        VARCHAR status "PENDING_PAYMENT, PAID, PAYMENT_FAILED, EXPIRED, CANCELLED"
-        TIMESTAMPTZ payment_expires_at
-        UUID payments_payment_id
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
+   order_items {
+      UUID id PK
+      UUID sales_order_id FK
+      UUID sales_seat_id FK
+      VARCHAR sales_seat_label
+      VARCHAR sales_unit_price
+      CHAR sales_currency "EUR, USD, JPY, GBP"
+   }
 
-    order_items {
-        UUID id PK
-        UUID order_id FK
-        UUID seat_id FK, UK
-        NUMERIC catalog_unit_price
-        CHAR currency "EUR, USD, JPY, GBP"
-    }
+   incoming_messages {
+      UUID message_id PK
+      VARCHAR message_type
+      JSONB payload
+      TIMESTAMPTZ processed_at
+   }
 
-    incoming_messages {
-        UUID message_id PK
-        VARCHAR message_type
-        JSONB payload
-        TIMESTAMPTZ processed_at
-    }
-
-    outgoing_messages {
-        UUID id PK
-        VARCHAR message_type
-        JSONB payload
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ published_at
-    }
+   outgoing_messages {
+      UUID id PK
+      VARCHAR message_type
+      JSONB payload
+      TIMESTAMPTZ created_at
+      TIMESTAMPTZ published_at
+   }
 ```
 
 ## 2. Tables
@@ -197,7 +186,7 @@ Represents the **local snapshot of a Catalog session** that Sales needs in order
 |---|---|
 | `id` | Sales-internal UUID identifier |
 | `catalog_event_id` | Event ID in Catalog |
-| `catalog_session_id` | Session ID in Catalog |
+| `catalog_session_id` | Session ID in Catalog, unique |
 | `catalog_venue_id` | Venue ID in Catalog |
 | `catalog_session_start_at` | Session start date and time |
 | `catalog_sales_start_at` | Sales opening |
@@ -211,79 +200,67 @@ Represents the **local snapshot of a Catalog session** that Sales needs in order
 
 Contains one row for each sellable seat associated with a session. Sales keeps **only the commercial information**, not the floor plan geometry or the seat's graphical data.
 
-| Column | Meaning |
-|---|---|
-| `id` | Internal UUID identifier of the session/seat combination |
-| `sales_session_id` | FK to `sales_sessions.id` |
-| `catalog_seat_id` | Identifier of the physical seat in Catalog |
-| `status` | Commercial availability: `FREE`, `HELD`, `SOLD` |
-| `catalog_currency` | `EUR`, `USD`, `JPY`, `GBP` |
-| `catalog_price` | Price received from Catalog in the snapshot |
+| Column | Meaning | Agreed states |
+|---|---|---|
+| `id` | Internal UUID identifier of the session/seat combination | - |
+| `sales_session_id` | FK to `sales_sessions.id` | - |
+| `catalog_seat_id` | Identifier of the physical seat in Catalog | - |
+| `catalog_seat_label` | Human-readable label of the seat, received from Catalog | - |
+| `status` | Commercial availability | `FREE`: available for purchase.<br>`HELD`: locked by an order in `PENDING_PAYMENT`, until the order expires or is paid.<br>`SOLD`: purchased (order `PAID`). |
+| `catalog_currency` | `EUR`, `USD`, `JPY`, `GBP` | - |
+| `catalog_price` | Price received from Catalog in the snapshot | - |
 
-The frontend can combine the seat map returned by Catalog with the availability and prices returned by Sales by using `catalog_seat_id`.
+The pair (`sales_session_id`, `catalog_seat_id`) is unique. The frontend can combine the seat map returned by Catalog with the availability and prices returned by Sales by using `catalog_seat_id`.
 
-### 2.3 `holds`
+### 2.3 `orders`
 
-Represents the temporary lock on the seats selected by a customer.
+Represents the commercial order. An order is created at **checkout**, when the customer confirms the selected seats: in the same transaction the seats are locked (`HELD`) and the payment timer starts. Selecting seats before checkout is not persisted and does not lock anything.
 
 | Column | Meaning | Agreed states |
 |---|---|---|
 | `id` | UUID identifier | - |
-| `customer_id` | Customer who owns the HOLD | - |
-| `status` | HOLD status | `ACTIVE`: active HOLD.<br>`ORDER_CREATED`: an order has been created from the HOLD.<br>`EXPIRED`: expired HOLD. |
-| `expires_at` | Lock expiration | - |
+| `sales_session_id` | FK to `sales_sessions.id` | - |
+| `customer_id` | Customer identifier | - |
+| `total_amount` | Total order amount | - |
+| `currency` | ISO 4217 currency code (`EUR`, `USD`, `JPY`, `GBP`) | - |
+| `status` | Order status | `PENDING_PAYMENT`<br>`PAID`<br>`PAYMENT_FAILED`<br>`EXPIRED`<br>`CANCELLED` |
+| `expires_at` | Expiration of the time allowed for payment | - |
 | `created_at` | Creation | - |
 | `updated_at` | Last modification | - |
 
-If the customer closes the browser, the backend does not try to detect it: the HOLD remains active until it expires. A backend process takes care of expiring HOLDs.
+`expires_at` is the single timer of the purchase flow: it is computed by Sales at checkout (current time plus the configured duration) and stored, so that orders already created keep their original deadline if the duration changes.
 
-### 2.4 `hold_items`
+Payment processing is managed by the Payments service. Sales only keeps the reference to the external payment in `order_payments`.
 
-Associates seats with a HOLD.
+### 2.4 `order_payments`
+
+Tracks the payments of the external Payments service associated with an order. An order can have more than one payment (for example a failed attempt followed by a retry before the order expires).
 
 | Column | Meaning |
 |---|---|
 | `id` | UUID identifier |
-| `hold_id` | FK to `holds.id` |
-| `seat_id` | FK to `session_seats.id` |
+| `sales_order_id` | FK to `orders.id` |
+| `payments_payment_id` | Payment ID in Payments, unique, no foreign key |
+| `created_at` | Creation |
 
-Creating a HOLD must check and update the seats atomically: only seats with status `FREE` can move to `HELD`. The check must be safe under concurrent requests.
+The unique constraint on `payments_payment_id` prevents the same external payment from being linked more than once. When the link is created from a message or webhook, the insertion must be idempotent.
 
-### 2.5 `orders`
-
-Represents the commercial order created from a HOLD.
-
-| Column | Meaning | Agreed states |
-|---|---|---|
-| `id` | UUID identifier | - |
-| `hold_id` | FK to `holds.id`, unique | - |
-| `customer_id` | Customer identifier | - |
-| `customer_email` | Snapshot of the email at the time of the order | - |
-| `customer_first_name` | Snapshot of the first name | - |
-| `customer_last_name` | Snapshot of the last name | - |
-| `total_amount` | Total order amount | - |
-| `currency` | ISO 4217 currency code, for example `EUR` | - |
-| `status` | Order status | `PENDING_PAYMENT`<br>`PAID`<br>`PAYMENT_FAILED`<br>`EXPIRED`<br>`CANCELLED` |
-| `payment_expires_at` | Expiration of the time allowed for payment | - |
-| `payments_payment_id` | Payment ID in Payments, nullable | - |
-| `created_at` | Creation | - |
-| `updated_at` | Last modification | - |
-
-At creation time, `holds.expires_at` and `orders.payment_expires_at` may receive the same timestamp. After the order is created, the payment process is governed by the order's expiration.
-
-### 2.6 `order_items`
+### 2.5 `order_items`
 
 Contains one row for each seat associated with the order.
 
 | Column | Meaning |
 |---|---|
 | `id` | UUID identifier |
-| `order_id` | FK to `orders.id` |
-| `seat_id` | FK to `session_seats.id`, unique |
-| `catalog_unit_price` | Unit price captured at the time of the order |
-| `currency` | ISO 4217 currency code (`EUR`, `USD`, `JPY`, `GBP`) |
+| `sales_order_id` | FK to `orders.id` |
+| `sales_seat_id` | FK to `session_seats.id`; the pair (`sales_order_id`, `sales_seat_id`) is unique |
+| `sales_seat_label` | Seat label captured by Sales at the time of the order |
+| `sales_unit_price` | Unit price captured by Sales at the time of the order |
+| `sales_currency` | ISO 4217 currency code (`EUR`, `USD`, `JPY`, `GBP`) captured by Sales at the time of the order |
 
-### 2.7 `incoming_messages`
+Price, currency and seat label are a historical snapshot and do not change if the Catalog data is updated later. At checkout, Sales copies `session_seats.catalog_seat_label`, `catalog_price` and `catalog_currency` into `order_items.sales_seat_label`, `sales_unit_price` and `sales_currency`. The same seat can appear in several orders over time (for example after an order expired), but exclusivity at any given moment is guaranteed by `session_seats.status`.
+
+### 2.6 `incoming_messages`
 
 Records the messages received from the other microservices and already processed by Sales. It guarantees idempotency: if the same message is delivered more than once, Sales recognizes the already-recorded ID and does not repeat the processing.
 
@@ -296,7 +273,7 @@ Records the messages received from the other microservices and already processed
 
 Recording the message, updating the business data and any insertion into `outgoing_messages` must happen in the same transaction. If the transaction fails, the message record is also rolled back and the broker can redeliver the message.
 
-### 2.8 `outgoing_messages`
+### 2.7 `outgoing_messages`
 
 Records the messages generated by Sales that must be published to the message broker. It implements the Outbox side of the pattern.
 
@@ -307,3 +284,19 @@ Records the messages generated by Sales that must be published to the message br
 | `payload` | Message content, JSONB |
 | `created_at` | Creation time |
 | `published_at` | Time of confirmed publication; nullable |
+
+## 3. Purchase flow and expirations
+
+1. **Seat selection.** The customer selects the seats on the map. The selection is only an intention: nothing is stored and no seat is locked. The map is kept up to date in real time through the seat events published by Sales.
+
+2. **Checkout.** In a single transaction Sales:
+   * locks the requested `session_seats` rows (always in the same order, to avoid deadlocks);
+   * moves them from `FREE` to `HELD` only if all of them are `FREE`; otherwise the whole operation is rolled back and the customer is told which seats are no longer available;
+   * creates the `orders` row (`PENDING_PAYMENT`, with `expires_at`) and the `order_items` rows with the price, currency and seat label snapshot;
+   * inserts the corresponding messages into `outgoing_messages`.
+
+3. **Payment.** When the Payments service confirms the payment, the order becomes `PAID`, the seats become `SOLD` and a message is emitted.
+
+4. **Expiration.** A backend process looks for orders in `PENDING_PAYMENT` with `expires_at` in the past, moves them to `EXPIRED`, sets their seats back to `FREE` and emits the messages that update the map. The same release of the seats applies to orders that become `CANCELLED` or `PAYMENT_FAILED`.
+
+Seat state changes must always produce a message in `outgoing_messages` within the same transaction, so that the real-time map stays consistent.

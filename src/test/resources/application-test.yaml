@@ -1,0 +1,18 @@
+# Profile used by the tests (@ActiveProfiles("test")).
+# It replaces the default "local" profile, so application-local.yaml and its .env
+# variables are not read: database and broker come from TestcontainersConfiguration.
+# Only db/migration is applied (no dev-data seed): every test inserts its own data.
+
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        # The @RabbitListener consumers are not started: the test broker has no
+        # queues from definitions.json, and these tests do not consume messages.
+        auto-startup: false
+
+sales:
+  outbox:
+    scheduler:
+      # The tests call OutboxPublisher.publishPending() directly.
+      enabled: false
