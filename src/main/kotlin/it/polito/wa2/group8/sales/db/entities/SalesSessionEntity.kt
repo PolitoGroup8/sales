@@ -3,7 +3,6 @@ package it.polito.wa2.group8.sales.db.entities
 import it.polito.wa2.group8.sales.db.BaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import java.time.OffsetDateTime
@@ -30,6 +29,9 @@ class SalesSessionEntity(
     @Column(name = "catalog_venue_id", nullable = false, updatable = false)
     var catalogVenueId: UUID,
 
+    @Column(name = "catalog_event_name", nullable = false, updatable = false)
+    var catalogEventName: String,
+
     @Column(name = "catalog_session_start_at", nullable = false)
     var catalogSessionStartAt: OffsetDateTime,
 
@@ -42,6 +44,12 @@ class SalesSessionEntity(
     @Column(name = "catalog_max_tickets_per_order", nullable = false)
     var catalogMaxTicketsPerOrder: Int,
 
+    @Column(name = "catalog_venue_name", nullable = false, length = 255)
+    var catalogVenueName: String,
+
+    @Column(name = "catalog_venue_city", nullable = false, length = 255)
+    var catalogVenueCity: String,
+
     @Column(name = "snapshot_version", nullable = false)
     var snapshotVersion: Long,
 
@@ -50,4 +58,4 @@ class SalesSessionEntity(
 
     @Column(name = "snapshot_updated_at", nullable = false)
     var snapshotUpdatedAt: OffsetDateTime = OffsetDateTime.now(),
-): BaseEntity()
+) : BaseEntity()

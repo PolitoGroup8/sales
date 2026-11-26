@@ -1,10 +1,9 @@
-package it.polito.wa2.group8.sales.repositorys
+package it.polito.wa2.group8.sales.repositories
 
 import it.polito.wa2.group8.sales.db.entities.IncomingMessageEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 import java.time.OffsetDateTime
 import java.util.UUID
 

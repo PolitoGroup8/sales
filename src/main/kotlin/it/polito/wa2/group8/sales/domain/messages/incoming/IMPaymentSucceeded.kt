@@ -1,6 +1,6 @@
 package it.polito.wa2.group8.sales.domain.messages.incoming
 
-import it.polito.wa2.group8.sales.domain.IncomingMessageI
+import it.polito.wa2.group8.sales.domain.messages.interfaces.IncomingMessageI
 import it.polito.wa2.group8.sales.domain.types.EntityId
 import it.polito.wa2.group8.sales.messaging.constant.MessageTypes
 import it.polito.wa2.group8.sales.messaging.domain.PaymentSucceeded

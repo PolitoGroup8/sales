@@ -35,3 +35,12 @@ value class Amount(val value: String) {
 
     override fun toString(): String = value
 }
+
+@JvmInline
+value class Email(val value: String) {
+    init {
+        require(value.isNotBlank() && "@" in value) {
+            "Invalid email: $value"
+        }
+    }
+}
