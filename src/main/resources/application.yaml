@@ -8,3 +8,15 @@ spring:
     show-sql: false
   flyway:
     enabled: true
+
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 2s
+          multiplier: 2.0
+          max-retries: 3
