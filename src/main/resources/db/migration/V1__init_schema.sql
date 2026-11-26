@@ -13,11 +13,14 @@ CREATE TABLE sales_sessions (
     catalog_event_id UUID NOT NULL,
     catalog_session_id UUID NOT NULL,
     catalog_venue_id UUID NOT NULL,
+    catalog_event_name VARCHAR(255) NOT NULL,
 
     catalog_session_start_at TIMESTAMPTZ NOT NULL,
     catalog_sales_start_at TIMESTAMPTZ NOT NULL,
     catalog_sales_end_at TIMESTAMPTZ NOT NULL,
     catalog_max_tickets_per_order INTEGER NOT NULL,
+    catalog_venue_name VARCHAR(255) NOT NULL,
+    catalog_venue_city VARCHAR(255) NOT NULL,
 
     snapshot_version BIGINT NOT NULL,
 
@@ -57,28 +60,30 @@ CREATE TABLE sales_sessions (
 CREATE TABLE session_seats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-   sales_session_id UUID NOT NULL,
-   catalog_seat_id UUID NOT NULL,
-   catalog_seat_label VARCHAR(50) NOT NULL,
+    sales_session_id UUID NOT NULL,
+    catalog_sector_id UUID NOT NULL,
+    catalog_seat_id UUID NOT NULL,
+    catalog_seat_label VARCHAR(50) NOT NULL,
+    catalog_sector_name VARCHAR(50) NOT NULL,
 
    status VARCHAR(10) NOT NULL DEFAULT 'FREE',
    catalog_price VARCHAR(10) NOT NULL,
    catalog_currency CHAR(3) NOT NULL DEFAULT 'EUR',
 
-   CONSTRAINT fk_session_seats_sales_session
+    CONSTRAINT fk_session_seats_sales_session
        FOREIGN KEY (sales_session_id)
            REFERENCES sales_sessions(id),
 
-   CONSTRAINT uq_session_seats_session_seat
+    CONSTRAINT uq_session_seats_session_seat
        UNIQUE (sales_session_id, catalog_seat_id),
 
-   CONSTRAINT chk_session_seats_status
+    CONSTRAINT chk_session_seats_status
        CHECK (status IN ('FREE', 'HELD', 'SOLD')),
 
-   CONSTRAINT chk_session_seats_price
+    CONSTRAINT chk_session_seats_price
        CHECK (catalog_price ~ '^\d+(\.\d+)?$' AND catalog_price::NUMERIC >= 0),
 
-   CONSTRAINT chk_session_seats_currency
+    CONSTRAINT chk_session_seats_currency
        CHECK (catalog_currency IN ('EUR', 'USD', 'JPY', 'GBP'))
 );
 

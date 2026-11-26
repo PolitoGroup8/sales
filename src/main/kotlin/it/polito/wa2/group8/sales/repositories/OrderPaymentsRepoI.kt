@@ -1,4 +1,4 @@
-package it.polito.wa2.group8.sales.repositorys
+package it.polito.wa2.group8.sales.repositories
 
 import it.polito.wa2.group8.sales.db.entities.OrderPaymentsEntity
 import org.springframework.data.jpa.repository.JpaRepository

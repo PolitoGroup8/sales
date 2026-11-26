@@ -1,6 +1,6 @@
 package it.polito.wa2.group8.sales.messaging.consumer
 
-import it.polito.wa2.group8.sales.messaging.constant.RabbitQueue
+import it.polito.wa2.group8.sales.messaging.constant.RabbitMessaging
 import it.polito.wa2.group8.sales.messaging.dto.PaymentSucceededEventDTO
 import it.polito.wa2.group8.sales.messaging.dto.RabbitEventDTO
 import it.polito.wa2.group8.sales.messaging.mapper.toDomain
@@ -14,7 +14,7 @@ class PaymentsEventConsumer(
     private val paymentsEventHandler: PaymentsEventHandlerI,
 ) {
 
-    @RabbitListener(queues = [RabbitQueue.PAYMENTS_EVENTS])
+    @RabbitListener(queues = [RabbitMessaging.PAYMENTS_EVENTS_QUEUE])
     fun consume(rabbitEventDTO: RabbitEventDTO) {
         when (rabbitEventDTO) {
             is PaymentSucceededEventDTO -> {

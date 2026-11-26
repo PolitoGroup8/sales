@@ -32,11 +32,17 @@ class SessionSeatEntity(
     )
     var salesSession: SalesSessionEntity,
 
+    @Column(name = "catalog_sector_id", nullable = false)
+    var catalogSectorId: UUID,
+
     @Column(name = "catalog_seat_id", nullable = false, updatable = false)
     var catalogSeatId: UUID,
 
     @Column(name = "catalog_seat_label", nullable = false, length = 50)
     var catalogSeatLabel: String,
+
+    @Column(name = "catalog_sector_name", nullable = false, length = 50)
+    var catalogSectorName: String,
 
     @Column(name = "status", nullable = false, length = 10)
     var status: String = "FREE",
@@ -46,4 +52,4 @@ class SessionSeatEntity(
 
     @Column(name = "catalog_currency", nullable = false, length = 3)
     var catalogCurrency: String = "EUR"
-): BaseEntity()
+) : BaseEntity()
