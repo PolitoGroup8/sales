@@ -9,8 +9,8 @@ import it.polito.wa2.group8.sales.messaging.mapper.toDTO
 import it.polito.wa2.group8.sales.repositories.OutgoingMessagesRepoI
 import it.polito.wa2.group8.sales.services.OutgoingMessagesServiceI
 import it.polito.wa2.group8.sales.services.PendingOutgoingMessage
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 import java.time.OffsetDateTime
 
@@ -19,6 +19,8 @@ class OutgoingMessagesService(
     private val outgoingMessagesRepo: OutgoingMessagesRepoI,
     private val objectMapper: ObjectMapper
 ) : OutgoingMessagesServiceI {
+
+    private val logger = LoggerFactory.getLogger(OutgoingMessagesService::class.java)
 
     override fun recordOrderPaid(
         payload: IssueTicketPayload,
@@ -31,11 +33,16 @@ class OutgoingMessagesService(
             publishedAt = null,
             payload = payload
         )
-
-        val oMPaymentSucceededJson = objectMapper.writeValueAsString(payload.toDTO())
-        val outboxEntity = oMPaymentSucceeded.toEntity(oMPaymentSucceededJson)
-
-        outgoingMessagesRepo.save(outboxEntity)
+        try{
+            val oMPaymentSucceededJson = objectMapper.writeValueAsString(payload.toDTO())
+            val outboxEntity = oMPaymentSucceeded.toEntity(oMPaymentSucceededJson)
+            outgoingMessagesRepo.save(outboxEntity)
+        }
+        catch (e: Exception) {
+            logger
+                .error(e.message, e)
+            throw e
+        }
     }
 
     override fun findPendingMessages(): List<PendingOutgoingMessage> {

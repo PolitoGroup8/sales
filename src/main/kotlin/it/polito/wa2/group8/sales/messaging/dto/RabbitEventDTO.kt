@@ -9,9 +9,12 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
     include = JsonTypeInfo.As.EXISTING_PROPERTY,
     property = "type",
     visible = true,
+    defaultImpl = UnknownEventDTO::class,
 )
 @JsonSubTypes(
-    JsonSubTypes.Type(value = PaymentSucceededEventDTO::class, name = "PAYMENT_SUCCESS"),
+    JsonSubTypes.Type(
+        value = PaymentSucceededEventDTO::class, name = "PAYMENT_SUCCESS"
+    ),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 interface RabbitEventDTO {
@@ -20,3 +23,10 @@ interface RabbitEventDTO {
     val type: String
     val message: String
 }
+
+data class UnknownEventDTO(
+    override val eventId: String = "",
+    override val occurredAt: String = "",
+    override val type: String = "",
+    override val message: String = "",
+) : RabbitEventDTO

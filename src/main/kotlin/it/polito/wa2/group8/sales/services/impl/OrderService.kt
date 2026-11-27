@@ -11,6 +11,8 @@ import it.polito.wa2.group8.sales.domain.messages.outgoing.IssueTicketLine
 import it.polito.wa2.group8.sales.domain.messages.outgoing.IssueTicketPayload
 import it.polito.wa2.group8.sales.domain.types.Email
 import it.polito.wa2.group8.sales.domain.types.EntityId
+import it.polito.wa2.group8.sales.exceptions.OrderDataAnomalyException
+import it.polito.wa2.group8.sales.exceptions.OrderNotFoundException
 import it.polito.wa2.group8.sales.messaging.constant.MessageTypes
 import it.polito.wa2.group8.sales.messaging.domain.PaymentSucceeded
 import it.polito.wa2.group8.sales.repositories.OrderItemsRepoI
@@ -59,7 +61,7 @@ class OrderService(
                 payloadOrderId,
                 payloadPaymentId
             )
-            throw IllegalStateException("Order not found for orderId=$payloadOrderId, paymentId=$payloadPaymentId")
+            throw OrderNotFoundException(payloadOrderId, payloadPaymentId)
         }
         else {
             val orderEntityId = orderEntity.id!!
@@ -70,21 +72,20 @@ class OrderService(
 
                     val orderItemsWithSeats  = orderItemsRepo.findAllWithSeatByOrderId(orderEntityId)
 
-                    if(runChecks(orderEntityId, orderItemsWithSeats)){
+                    runChecks(orderEntityId, orderItemsWithSeats)
 
-                        confirmPayment(
-                            orderEntity = orderEntity,
-                            orderItemsWithSeats = orderItemsWithSeats ,
-                            paymentId = payloadPaymentId
-                        )
+                    confirmPayment(
+                        orderEntity = orderEntity,
+                        orderItemsWithSeats = orderItemsWithSeats ,
+                        paymentId = payloadPaymentId
+                    )
 
-                        logger.info(
-                            "Order successfully paid. orderId={}, paymentId={}, seatsSold={}",
-                            orderEntityId,
-                            payloadPaymentId,
-                            orderItemsWithSeats.size
-                        )
-                    }
+                    logger.info(
+                        "Order successfully paid. orderId={}, paymentId={}, seatsSold={}",
+                        orderEntityId,
+                        payloadPaymentId,
+                        orderItemsWithSeats.size
+                    )
                 }
 
                 OrderStatus.PAID.name -> {
@@ -120,11 +121,9 @@ class OrderService(
                 }
 
                 else -> {
-                    logger.error(
-                        "Unknown order status '{}'. orderId={}, paymentId={}",
-                        orderEntityStatus,
+                    throw OrderDataAnomalyException(
                         orderEntityId,
-                        payloadPaymentId
+                        "Unknown order status '$orderEntityStatus' for paymentId=$payloadPaymentId"
                     )
                 }
             }
@@ -132,29 +131,21 @@ class OrderService(
     }
 
 
-    private fun runChecks(orderEntityId: UUID, items: List<OrderItemsEntity>): Boolean {
-        var returnValue = true
-
+    private fun runChecks(orderEntityId: UUID, items: List<OrderItemsEntity>) {
         if (items.isEmpty()) {
-            logger.error(
-                "Order in PENDING_PAYMENT has no order_items — data anomaly. orderId={}",
-                orderEntityId
+            throw OrderDataAnomalyException(
+                orderEntityId,
+                "Order in PENDING_PAYMENT has no order_items"
             )
-            returnValue = false
         }
 
         val nonHeld = items.filter { it.seat.status != SeatStatus.HELD.name }
-
         if (nonHeld.isNotEmpty()) {
-            logger.error(
-                "Seats not in HELD status for order in PENDING_PAYMENT — data anomaly. orderId={}, seatIds={}",
+            throw OrderDataAnomalyException(
                 orderEntityId,
-                nonHeld.map { it.seat.id }
+                "Seats not in HELD status: ${nonHeld.map { it.seat.id }}"
             )
-            returnValue = false
         }
-
-        return returnValue
     }
 
     private fun confirmPayment(
